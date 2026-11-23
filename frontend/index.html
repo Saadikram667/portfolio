@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Developer Portfolio — Full-Stack & AI Systems</title>
+    <meta
+      name="description"
+      content="Cinematic full-stack and AI developer portfolio featuring an interactive tree workflow, case studies, and engineering stack."
+    />
+    <meta property="og:title" content="Developer Portfolio — Full-Stack & AI Systems" />
+    <meta
+      property="og:description"
+      content="Interactive tree workflow, featured engineering builds, and direct contact terminal."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Prevent theme flash before React mounts -->
+    <script>
+      (function () {
+        const saved = localStorage.getItem('portfolio-theme');
+        if (saved === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+
+    <!-- Structured Data (JSON-LD Person) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": "Portfolio Owner",
+        "jobTitle": "Full-Stack & AI Software Engineer"
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
