@@ -3,40 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Developer Portfolio — Full-Stack & AI Systems</title>
+    <title>Saad Ikram · Crimson Nova — AI & Cybersecurity Engineer</title>
     <meta
       name="description"
-      content="Cinematic full-stack and AI developer portfolio featuring an interactive tree workflow, case studies, and engineering stack."
+      content="Portfolio of Saad Ikram (Crimson Nova) — Computer Science student building AI diagnostics, Django automation pipelines, computer-vision systems, and security-conscious web apps."
     />
-    <meta property="og:title" content="Developer Portfolio — Full-Stack & AI Systems" />
+    <meta property="og:title" content="Saad Ikram · Crimson Nova — AI & Cybersecurity Engineer" />
     <meta
       property="og:description"
-      content="Interactive tree workflow, featured engineering builds, and direct contact terminal."
+      content="AI diagnostics, automated Django/Celery pipelines, ONVIF/YOLO computer vision, and full-stack software engineering."
     />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-
-    <!-- Prevent theme flash before React mounts -->
+    <meta property="og:image" content="/assets/crimson-nova.png" />
+    <link rel="icon" type="image/png" href="/assets/crimson-nova.png" />
     <script>
       (function () {
-        const saved = localStorage.getItem('portfolio-theme');
+        var saved = localStorage.getItem('portfolio-theme');
         if (saved === 'light') {
           document.documentElement.classList.remove('dark');
         } else {
           document.documentElement.classList.add('dark');
         }
       })();
-    </script>
-
-    <!-- Structured Data (JSON-LD Person) -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "Person",
-        "name": "Portfolio Owner",
-        "jobTitle": "Full-Stack & AI Software Engineer"
-      }
     </script>
   </head>
   <body>
