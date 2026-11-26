@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ExternalLink, Github, Layers, X } from 'lucide-react';
 import type { ProjectData } from '../types/portfolio';
 import { DURATION, MOTION_EASE } from '../lib/motion';
+import { getSafeMediaUrl } from '../lib/media';
 import { CodeBlock } from './CodeBlock';
 
 interface CaseStudyModalProps {
@@ -11,14 +12,32 @@ interface CaseStudyModalProps {
 }
 
 export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
+  const [coverBroken, setCoverBroken] = useState(false);
+
+  useEffect(() => {
+    setCoverBroken(false);
+  }, [project?.id]);
+
   useEffect(() => {
     if (!project) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [project, onClose]);
+
+  const safeCover = project ? getSafeMediaUrl(project.cover_image) : '';
+  const hasStructuredStudy = Boolean(
+    project && (project.case_study_problem || project.case_study_solution)
+  );
 
   return (
     <AnimatePresence>
@@ -34,7 +53,7 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
           <motion.article
             role="dialog"
             aria-modal="true"
-            aria-label={`${project.title} Case Study`}
+            aria-label={`${project.title} details`}
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -45,15 +64,16 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
             {/* Sticky Top Bar */}
             <div className="sticky top-0 z-10 px-6 sm:px-8 py-4 nav-glass border-b border-edge flex items-center justify-between gap-4">
               <div className="flex items-center gap-2.5">
-                <span className="px-2.5 py-0.5 rounded-md text-xs font-mono border border-gold/50 text-burgundy dark:text-gold bg-surface-2">
-                  Case Study
+                <span className="px-2.5 py-0.5 rounded-md text-xs font-mono border border-edge text-burgundy dark:text-gold bg-surface-2">
+                  {project.has_case_study ? 'Case Study' : 'Architecture & Details'}
                 </span>
                 <span className="text-xs font-mono text-muted">{project.domain_label}</span>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-muted hover:text-ink bg-surface-2 border border-edge transition-colors"
+                aria-label="Close modal"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-muted hover:text-ink bg-surface-2 border border-edge hover:border-gold transition-colors"
               >
                 <span>ESC</span>
                 <X className="w-3.5 h-3.5" />
@@ -69,7 +89,7 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
                 <p className="text-base text-muted leading-relaxed">{project.tagline}</p>
 
                 {project.outcome && (
-                  <div className="p-4 rounded-2xl bg-surface-2/75 border border-gold/40 text-sm text-ink leading-relaxed">
+                  <div className="p-4 rounded-2xl bg-surface-2/75 border border-edge text-sm text-ink leading-relaxed">
                     <span className="font-mono text-xs uppercase tracking-wider text-burgundy dark:text-gold block mb-1">
                       Outcome
                     </span>
@@ -78,29 +98,39 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
                 )}
               </div>
 
-              {project.cover_image && (
+              {safeCover && !coverBroken && (
                 <img
-                  src={project.cover_image}
+                  src={safeCover}
                   alt={project.title}
+                  onError={() => setCoverBroken(true)}
                   className="w-full max-h-80 object-cover rounded-2xl border border-edge"
                 />
               )}
 
-              {/* Problem & Solution */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="p-5 rounded-2xl bg-surface-2/55 border border-edge space-y-2">
-                  <h3 className="font-display text-lg font-bold text-ink">The Problem</h3>
-                  <p className="text-sm text-muted leading-relaxed">
-                    {project.case_study_problem || project.overview}
-                  </p>
+              {/* Problem & Solution OR Single Overview */}
+              {hasStructuredStudy ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="p-5 rounded-2xl bg-surface-2/55 border border-edge space-y-2">
+                    <h3 className="font-display text-lg font-bold text-ink">The Problem</h3>
+                    <p className="text-sm text-muted leading-relaxed">
+                      {project.case_study_problem || project.overview}
+                    </p>
+                  </div>
+                  <div className="p-5 rounded-2xl bg-surface-2/55 border border-edge space-y-2">
+                    <h3 className="font-display text-lg font-bold text-ink">The Solution</h3>
+                    <p className="text-sm text-muted leading-relaxed">
+                      {project.case_study_solution || project.overview}
+                    </p>
+                  </div>
                 </div>
-                <div className="p-5 rounded-2xl bg-surface-2/55 border border-edge space-y-2">
-                  <h3 className="font-display text-lg font-bold text-ink">The Solution</h3>
-                  <p className="text-sm text-muted leading-relaxed">
-                    {project.case_study_solution || project.overview}
-                  </p>
-                </div>
-              </div>
+              ) : (
+                project.overview && (
+                  <div className="p-5 rounded-2xl bg-surface-2/55 border border-edge space-y-2">
+                    <h3 className="font-display text-lg font-bold text-ink">Project Overview</h3>
+                    <p className="text-sm text-muted leading-relaxed">{project.overview}</p>
+                  </div>
+                )
+              )}
 
               {/* Architecture Flow */}
               {project.architecture_notes && (
@@ -115,7 +145,7 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
                 </div>
               )}
 
-              {/* Key Engineering Trade-offs */}
+              {/* Key Engineering Decisions */}
               {project.case_study_tradeoffs.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="font-display text-lg font-bold text-ink">
@@ -123,7 +153,10 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
                   </h3>
                   <ul className="space-y-2.5">
                     {project.case_study_tradeoffs.map((point) => (
-                      <li key={point} className="flex items-start gap-3 text-sm text-ink leading-relaxed">
+                      <li
+                        key={point}
+                        className="flex items-start gap-3 text-sm text-ink leading-relaxed"
+                      >
                         <span className="w-2 h-2 rounded-full bg-gold mt-2 shrink-0" />
                         <span>{point}</span>
                       </li>
@@ -163,7 +196,7 @@ export function CaseStudyModal({ project, onClose }: CaseStudyModalProps) {
                       href={project.live_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl btn-primary-cta text-xs font-semibold"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-burgundy hover:bg-crimson text-[#FBF4E9] text-xs font-semibold transition-colors"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       <span>Live Demo</span>

@@ -1,5 +1,6 @@
 from collections import OrderedDict
-from django.http import HttpRequest
+from django.conf import settings
+from django.http import HttpRequest, HttpResponse
 from django.utils.html import strip_tags
 from django_ratelimit.decorators import ratelimit
 from ninja import NinjaAPI
@@ -9,20 +10,39 @@ from .schemas import ContactInSchema, ContactOutSchema, PortfolioResponseSchema
 
 api = NinjaAPI(
     title="Saad Ikram · Crimson Nova API",
-    version="2.1.0",
-    docs_url="/docs",
+    version="2.2.0",
+    docs_url="/docs" if settings.DEBUG else None,
 )
 
 
-def _resolve_file_url(request: HttpRequest, file_field, fallback_url: str = "") -> str:
+def _client_ip(_group: str, request: HttpRequest) -> str:
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "unknown")
+
+
+def _resolve_file_url(
+    request: HttpRequest,
+    file_field,
+    fallback_url: str = "",
+    default_static: str = "",
+) -> str:
     if file_field and getattr(file_field, "name", ""):
         url = file_field.url
-        return url if url.startswith("http") else request.build_absolute_uri(url)
-    return fallback_url or ""
+        if url.startswith("http"):
+            return url
+        # Local /media/ paths only work in local DEBUG mode, never on Vercel
+        if settings.DEBUG:
+            return request.build_absolute_uri(url)
+    return (fallback_url or "").strip() or default_static
 
 
 @api.get("/portfolio/", response=PortfolioResponseSchema)
-def get_portfolio(request: HttpRequest):
+def get_portfolio(request: HttpRequest, response: HttpResponse):
+    # Cache at Vercel's Edge CDN for 60s and serve stale while revalidating for 5m
+    response["Cache-Control"] = "public, s-maxage=60, stale-while-revalidate=300"
+
     profile_obj = Profile.objects.first()
     if profile_obj:
         profile = {
@@ -40,13 +60,22 @@ def get_portfolio(request: HttpRequest):
             "linkedin_url": profile_obj.linkedin_url,
             "credly_url": profile_obj.credly_url,
             "brand_logo": _resolve_file_url(
-                request, profile_obj.brand_logo, profile_obj.brand_logo_url
+                request,
+                profile_obj.brand_logo,
+                profile_obj.brand_logo_url,
+                "/assets/crimson-nova.png",
             ),
             "avatar_image": _resolve_file_url(
-                request, profile_obj.avatar_image, profile_obj.avatar_url
+                request,
+                profile_obj.avatar_image,
+                profile_obj.avatar_url,
+                "/assets/saad-portrait.jpg",
             ),
             "resume_url": _resolve_file_url(
-                request, profile_obj.resume_file, profile_obj.resume_url
+                request,
+                profile_obj.resume_file,
+                profile_obj.resume_url,
+                "/assets/Saad_Ikram_CV.pdf",
             ),
             "hero_stats": profile_obj.hero_stats or [],
             "work_style_note": profile_obj.work_style_note or "",
@@ -56,7 +85,7 @@ def get_portfolio(request: HttpRequest):
             "full_name": "Saad Ikram",
             "brand_name": "Crimson Nova",
             "monogram": "CN.",
-            "headline": "AI & Cybersecurity Engineer",
+            "headline": "AI & Cybersecurity Software Engineer",
             "subheadline": "Run `python manage.py seed_portfolio` to populate records.",
             "bio": "",
             "status_text": "Open to AI & Cybersecurity Roles",
@@ -68,7 +97,7 @@ def get_portfolio(request: HttpRequest):
             "credly_url": "",
             "brand_logo": "/assets/crimson-nova.png",
             "avatar_image": "/assets/saad-portrait.jpg",
-            "resume_url": "",
+            "resume_url": "/assets/Saad_Ikram_CV.pdf",
             "hero_stats": [],
             "work_style_note": "",
         }
@@ -168,8 +197,8 @@ def get_portfolio(request: HttpRequest):
     }
 
 
-@api.post("/contact/", response={200: ContactOutSchema, 429: ContactOutSchema})
-@ratelimit(key="ip", rate="5/m", method="POST", block=False)
+@api.post("/contact/", response={200: ContactOutSchema, 400: ContactOutSchema, 429: ContactOutSchema})
+@ratelimit(key=_client_ip, rate="5/m", method="POST", block=False)
 def submit_contact(request: HttpRequest, payload: ContactInSchema):
     if getattr(request, "limited", False):
         return 429, {
@@ -177,16 +206,30 @@ def submit_contact(request: HttpRequest, payload: ContactInSchema):
             "message": "Rate limit exceeded. Please wait a minute before sending again.",
         }
 
+    # Silent spam honeypot
     if payload.website.strip():
         return 200, {"ok": True, "message": "Transmission received."}
 
     clean_name = strip_tags(payload.name).strip()
+    clean_subject = strip_tags(payload.subject).strip()
     clean_message = strip_tags(payload.message).strip()
+
+    if not clean_name or not clean_message:
+        return 400, {
+            "ok": False,
+            "message": "Please provide a valid name and message.",
+        }
+
+    stored_message = (
+        f"[Subject: {clean_subject}]\n\n{clean_message}"
+        if clean_subject
+        else clean_message
+    )
 
     ContactMessage.objects.create(
         name=clean_name,
         email=str(payload.email).strip(),
-        message=clean_message,
+        message=stored_message,
     )
 
     return 200, {

@@ -20,10 +20,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
+          react: ['react', 'react-dom'],
           xyflow: ['@xyflow/react'],
-          shiki: ['shiki'],
           motion: ['motion'],
-          gsap: ['gsap', 'lenis'],
         },
       },
     },

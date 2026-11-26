@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Award, ExternalLink, X, ZoomIn } from 'lucide-react';
 import type { CertificateData } from '../types/portfolio';
 import { DURATION, MOTION_EASE } from '../lib/motion';
+import { getSafeMediaUrl } from '../lib/media';
 
 export function CertificatesSection({
   certificates,
@@ -16,24 +17,31 @@ export function CertificatesSection({
 
   useEffect(() => {
     if (!activeCert) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setActiveCert(null);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [activeCert]);
 
   if (certificates.length === 0) return null;
 
   return (
-    <section id="certificates" className="py-14 lg:py-16 space-y-6">
+    <section id="certificates" className="scroll-mt-24 py-14 lg:py-16 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <p className="text-xs font-mono uppercase tracking-widest text-crimson">
-            05 / Credentials & Badges
+            05 / Credentials &amp; Badges
           </p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
-            Certifications & Hackathons
+            Certifications &amp; Hackathons
           </h2>
         </div>
 
@@ -53,7 +61,9 @@ export function CertificatesSection({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {certificates.map((cert) => {
-          const hasImage = Boolean(cert.image) && !brokenImages[cert.id];
+          const safeImg = getSafeMediaUrl(cert.image);
+          const hasImage = Boolean(safeImg) && !brokenImages[cert.id];
+
           return (
             <article
               key={cert.id}
@@ -62,20 +72,20 @@ export function CertificatesSection({
               <div>
                 <button
                   type="button"
-                  onClick={() => hasImage && setActiveCert(cert)}
+                  onClick={() => hasImage && setActiveCert({ ...cert, image: safeImg })}
                   disabled={!hasImage}
-                  className="relative block w-full h-48 bg-surface-2/80 border-b border-edge overflow-hidden text-left"
+                  className="relative block w-full h-48 bg-white border-b border-edge overflow-hidden text-left disabled:bg-surface-2/80"
                 >
                   {hasImage ? (
                     <>
                       <img
-                        src={cert.image}
+                        src={safeImg}
                         alt={cert.title}
                         loading="lazy"
                         onError={() =>
-                          setBrokenImages((prev) => ({ ...prev, [cert.id]: true }))
+                          setBrokenImages((prev) => ({ ...prev, [String(cert.id)]: true }))
                         }
-                        className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                        className="w-full h-full object-contain p-2.5"
                       />
                       <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono bg-black/75 text-[#F4E8D8] border border-white/15 opacity-0 group-hover:opacity-100 transition-opacity">
                         <ZoomIn className="w-3.5 h-3.5 text-[#D9B44A]" />
@@ -142,6 +152,9 @@ export function CertificatesSection({
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
           >
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={activeCert.title}
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
@@ -161,7 +174,8 @@ export function CertificatesSection({
                 <button
                   type="button"
                   onClick={() => setActiveCert(null)}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-mono bg-surface-2 border border-edge text-muted hover:text-ink"
+                  aria-label="Close certificate preview"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-mono bg-surface-2 border border-edge hover:border-gold text-muted hover:text-ink transition-colors"
                 >
                   <span>ESC</span>
                   <X className="w-3.5 h-3.5" />

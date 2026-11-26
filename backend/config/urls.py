@@ -8,7 +8,10 @@ from portfolio.api import api
 
 
 def api_root(_request):
-    return JsonResponse({"status": "ok", "api": "/api/portfolio/", "docs": "/api/docs"})
+    payload = {"status": "ok", "api": "/api/portfolio/"}
+    if settings.DEBUG:
+        payload["docs"] = "/api/docs"
+    return JsonResponse(payload)
 
 
 urlpatterns = [

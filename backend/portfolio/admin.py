@@ -15,6 +15,9 @@ class ProfileAdmin(ModelAdmin):
         ("Channels & CV", {"fields": ("email", "github_url", "linkedin_url", "credly_url", "resume_file", "resume_url")}),
     )
 
+    def has_add_permission(self, request):
+        return not Profile.objects.exists()
+
 
 @admin.register(Project)
 class ProjectAdmin(ModelAdmin):
@@ -62,6 +65,8 @@ class ContactMessageAdmin(ModelAdmin):
     list_display = ("name", "email", "created_at", "is_read")
     list_editable = ("is_read",)
     list_filter = ("is_read", "created_at")
+    search_fields = ("name", "email", "message")
+    date_hierarchy = "created_at"
     readonly_fields = ("name", "email", "message", "created_at")
 
     def has_add_permission(self, request):

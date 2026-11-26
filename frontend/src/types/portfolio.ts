@@ -45,11 +45,9 @@ export interface ProjectData {
   has_case_study: boolean;
   case_study_problem: string;
   case_study_solution: string;
-  case_study_tradeoffs: ListString;
+  case_study_tradeoffs: string[];
   is_featured: boolean;
 }
-
-type ListString = string[];
 
 export interface SkillItem {
   id: number;
@@ -101,10 +99,3 @@ export interface PortfolioPayload {
   timeline: TimelineItem[];
   certificates: CertificateData[];
 }
-
-export type InspectorSelection =
-  | { kind: 'about'; profile: ProfileData; timeline: TimelineItem[] }
-  | { kind: 'project'; project: ProjectData }
-  | { kind: 'skills'; groups: SkillGroup[]; activeKey?: string }
-  | { kind: 'timeline'; entry: TimelineItem }
-  | { kind: 'contact'; profile: ProfileData };

@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { codeToHtml } from 'shiki';
-import { Check, Copy } from 'lucide-react';
 
 interface CodeBlockProps {
   code: string;
@@ -8,55 +6,60 @@ interface CodeBlockProps {
   filename?: string;
 }
 
-export function CodeBlock({ code, language = 'python', filename = 'snippet.py' }: CodeBlockProps) {
-  const [html, setHtml] = useState<string>('');
-  const [copied, setCopied] = useState(false);
+const highlightCache = new Map<string, string>();
+
+export function CodeBlock({
+  code,
+  language = 'python',
+  filename = 'snippet.py',
+}: CodeBlockProps) {
+  const source = code || '# No snippet provided yet';
+  const cacheKey = `${language}:${source}`;
+  const [html, setHtml] = useState<string>(() => highlightCache.get(cacheKey) || '');
 
   useEffect(() => {
+    const cached = highlightCache.get(cacheKey);
+    if (cached) {
+      setHtml(cached);
+      return;
+    }
+
     let active = true;
     async function highlight() {
       try {
-        const rendered = await codeToHtml(code || '# No snippet provided yet', {
-          lang: language || 'python',
-          theme: 'vitesse-dark',
-        });
+        const { codeToHtml } = await import('shiki');
+        let rendered: string;
+        try {
+          rendered = await codeToHtml(source, {
+            lang: language || 'python',
+            theme: 'vitesse-dark',
+          });
+        } catch {
+          rendered = await codeToHtml(source, {
+            lang: 'text',
+            theme: 'vitesse-dark',
+          });
+        }
+        highlightCache.set(cacheKey, rendered);
         if (active) setHtml(rendered);
       } catch {
-        const fallback = await codeToHtml(code || '# No snippet provided yet', {
-          lang: 'text',
-          theme: 'vitesse-dark',
-        });
-        if (active) setHtml(fallback);
+        // Fallback plain <pre> stays visible if highlighter fails to load
       }
     }
+
     void highlight();
     return () => {
       active = false;
     };
-  }, [code, language]);
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
+  }, [cacheKey, source, language]);
 
   return (
     <div className="rounded-2xl overflow-hidden border border-edge bg-[#121212] shadow-md">
-      <div className="px-4 py-2.5 bg-[#1B1013] border-b border-[#3A2128] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#E03150]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#D9B44A]" />
-          <span className="text-xs font-mono text-[#B79FA0] ml-1">{filename}</span>
-        </div>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-1 text-[11px] font-mono text-[#B79FA0] hover:text-[#D9B44A] transition-colors"
-        >
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
-        </button>
+      <div className="px-4 py-2.5 bg-[#201016] border-b border-[#4A2933] flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#E03150] shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#D9B44A] shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#7A555C] shrink-0" />
+        <span className="ml-2 text-xs font-mono text-[#C2AAAB] truncate">{filename}</span>
       </div>
 
       {html ? (
@@ -66,7 +69,7 @@ export function CodeBlock({ code, language = 'python', filename = 'snippet.py' }
         />
       ) : (
         <pre className="p-4 text-xs font-mono text-[#F3E6D3] overflow-x-auto">
-          <code>{code}</code>
+          <code>{source}</code>
         </pre>
       )}
     </div>

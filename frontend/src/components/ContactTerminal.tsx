@@ -1,154 +1,192 @@
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState, type FormEvent } from 'react';
+import { AlertCircle, CheckCircle2, Send, Terminal } from 'lucide-react';
 import { toast } from 'sonner';
-import { Check, Copy, Send } from 'lucide-react';
 import { sendContactMessage } from '../lib/api';
 
-const contactSchema = z.object({
-  name: z.string().min(2, 'Please enter at least 2 characters.'),
-  email: z.string().email('Please enter a valid email address.'),
-  message: z.string().min(10, 'Tell me a bit more (at least 10 characters).'),
-  website: z.string().optional(),
-});
+interface ContactTerminalProps {
+  email?: string;
+}
 
-type ContactFormValues = z.infer<typeof contactSchema>;
+export function ContactTerminal({ email }: ContactTerminalProps) {
+  const [name, setName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [honeypot, setHoneypot] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [feedbackMsg, setFeedbackMsg] = useState('');
 
-export function ContactTerminal({
-  email,
-  compact = false,
-}: {
-  email: string;
-  compact?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (honeypot) return;
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<ContactFormValues>({
-    resolver: zodResolver(contactSchema),
-    defaultValues: { name: '', email: '', message: '', website: '' },
-  });
+    const cleanName = name.trim();
+    const cleanEmail = senderEmail.trim();
+    const cleanSubject = subject.trim();
+    const cleanMessage = message.trim();
 
-  async function onSubmit(values: ContactFormValues) {
+    if (cleanName.length < 2 || !cleanEmail || cleanMessage.length < 3) {
+      setStatus('error');
+      setFeedbackMsg('Please enter your name, a valid email, and a short message.');
+      return;
+    }
+
+    setSubmitting(true);
+    setStatus('idle');
+    setFeedbackMsg('');
+
     try {
-      const res = await sendContactMessage(values);
-      toast.success(res.message);
-      reset();
+      const result = await sendContactMessage({
+        name: cleanName,
+        email: cleanEmail,
+        subject: cleanSubject || 'Portfolio Inquiry',
+        message: cleanMessage,
+        website: honeypot,
+      });
+
+      setStatus('success');
+      setFeedbackMsg(result.message);
+      setName('');
+      setSenderEmail('');
+      setSubject('');
+      setMessage('');
+      toast.success(result.message);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Transmission failed.');
+      const msg = err instanceof Error ? err.message : 'Network error. Please try again.';
+      setStatus('error');
+      setFeedbackMsg(msg);
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  async function copyEmail() {
-    if (!email) return;
-    await navigator.clipboard.writeText(email);
-    setCopied(true);
-    toast.success(`Copied ${email}`);
-    setTimeout(() => setCopied(false), 1600);
-  }
-
   return (
-    <div
-      className={`rounded-3xl overflow-hidden bg-[#150A0E] text-[#F4E8D8] terminal-card-frame ${
-        compact ? '' : 'w-full'
-      }`}
-    >
-      <div className="px-5 py-3.5 bg-[#201016] border-b border-[#4A2933] flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#E03150]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#D9B44A]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#7A555C]" />
-          <span className="ml-2 text-xs font-mono text-[#C2AAAB]">connect.sh</span>
+    <div className="w-full max-w-full rounded-3xl overflow-hidden bg-[#150A0E] text-[#F4E8D8] terminal-card-frame">
+      {/* Terminal Top Bar */}
+      <div className="px-4 sm:px-5 py-3 bg-[#201016] border-b border-[#4A2933] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#E03150] shrink-0" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#D9B44A] shrink-0" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#7A555C] shrink-0" />
+          <span className="ml-1.5 text-xs font-mono text-[#C2AAAB] truncate flex items-center gap-1.5">
+            <Terminal className="w-3.5 h-3.5 text-[#D9B44A] shrink-0" />
+            <span>connect.sh</span>
+          </span>
         </div>
-
-        {email && (
-          <button
-            type="button"
-            onClick={copyEmail}
-            className="inline-flex items-center gap-1.5 text-xs font-mono text-[#D9B44A] hover:underline truncate"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
-            <span className="truncate">{email}</span>
-          </button>
-        )}
+        <span className="text-[11px] font-mono text-emerald-400 shrink-0">● ready</span>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4" noValidate>
-        <p className="text-xs font-mono text-[#C2AAAB]">
-          $ ./connect.sh --send-message
-        </p>
-
+      {/* Form Body */}
+      <form onSubmit={handleSubmit} noValidate className="p-4 sm:p-6 space-y-4">
         <input
           type="text"
+          name="website"
+          value={honeypot}
+          onChange={(e) => setHoneypot(e.target.value)}
           tabIndex={-1}
           autoComplete="off"
-          aria-hidden="true"
           className="hidden"
-          {...register('website')}
+          aria-hidden="true"
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="contact-name" className="block text-xs font-mono text-[#C2AAAB] mb-1.5">
-              name
-            </label>
+          <label className="block space-y-1.5 min-w-0">
+            <span className="block text-xs font-mono text-[#D9B44A]">$ name *</span>
             <input
-              id="contact-name"
+              type="text"
+              name="name"
+              required
+              autoComplete="name"
               placeholder="Your name"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#0D0609] border border-[#4A2933] focus:border-[#D9B44A] text-sm text-[#F4E8D8] placeholder:text-[#8E7378] outline-none"
-              {...register('name')}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full min-w-0 min-h-[44px] px-3.5 py-2.5 rounded-xl bg-[#0B0507] border border-[#4A2933] focus:border-[#D9B44A] focus:outline-none text-base sm:text-sm text-[#F4E8D8] placeholder:text-[#7A555C]"
             />
-            {errors.name && (
-              <p className="text-xs font-mono text-[#E03150] mt-1">{errors.name.message}</p>
-            )}
-          </div>
+          </label>
 
-          <div>
-            <label htmlFor="contact-email" className="block text-xs font-mono text-[#C2AAAB] mb-1.5">
-              email
-            </label>
+          <label className="block space-y-1.5 min-w-0">
+            <span className="block text-xs font-mono text-[#D9B44A]">$ email *</span>
             <input
-              id="contact-email"
               type="email"
-              placeholder="you@company.com"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#0D0609] border border-[#4A2933] focus:border-[#D9B44A] text-sm text-[#F4E8D8] placeholder:text-[#8E7378] outline-none"
-              {...register('email')}
+              name="email"
+              inputMode="email"
+              required
+              autoComplete="email"
+              placeholder="you@domain.com"
+              value={senderEmail}
+              onChange={(e) => setSenderEmail(e.target.value)}
+              className="w-full min-w-0 min-h-[44px] px-3.5 py-2.5 rounded-xl bg-[#0B0507] border border-[#4A2933] focus:border-[#D9B44A] focus:outline-none text-base sm:text-sm text-[#F4E8D8] placeholder:text-[#7A555C]"
             />
-            {errors.email && (
-              <p className="text-xs font-mono text-[#E03150] mt-1">{errors.email.message}</p>
-            )}
-          </div>
+          </label>
         </div>
 
-        <div>
-          <label htmlFor="contact-message" className="block text-xs font-mono text-[#C2AAAB] mb-1.5">
-            message
-          </label>
-          <textarea
-            id="contact-message"
-            rows={4}
-            placeholder="Share project scope, timeline, or role details..."
-            className="w-full px-3.5 py-2.5 rounded-xl bg-[#0D0609] border border-[#4A2933] focus:border-[#D9B44A] text-sm text-[#F4E8D8] placeholder:text-[#8E7378] outline-none resize-y"
-            {...register('message')}
+        <label className="block space-y-1.5 min-w-0">
+          <span className="block text-xs font-mono text-[#D9B44A]">$ subject</span>
+          <input
+            type="text"
+            name="subject"
+            placeholder="Internship, freelance project, or collaboration"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full min-w-0 min-h-[44px] px-3.5 py-2.5 rounded-xl bg-[#0B0507] border border-[#4A2933] focus:border-[#D9B44A] focus:outline-none text-base sm:text-sm text-[#F4E8D8] placeholder:text-[#7A555C]"
           />
-          {errors.message && (
-            <p className="text-xs font-mono text-[#E03150] mt-1">{errors.message.message}</p>
+        </label>
+
+        <label className="block space-y-1.5 min-w-0">
+          <span className="block text-xs font-mono text-[#D9B44A]">$ message *</span>
+          <textarea
+            name="message"
+            required
+            rows={4}
+            placeholder="Tell me what you're building or looking for..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full min-w-0 px-3.5 py-2.5 rounded-xl bg-[#0B0507] border border-[#4A2933] focus:border-[#D9B44A] focus:outline-none text-base sm:text-sm text-[#F4E8D8] placeholder:text-[#7A555C] resize-y"
+          />
+        </label>
+
+        {status === 'success' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-xs sm:text-sm text-emerald-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>{feedbackMsg || 'Message received! I’ll get back to you shortly.'}</span>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-950/50 border border-[#E03150]/50 text-xs sm:text-sm text-red-200">
+            <AlertCircle className="w-4 h-4 text-[#E03150] shrink-0 mt-0.5" />
+            <span>
+              {feedbackMsg}{' '}
+              {email && (
+                <a href={`mailto:${email}`} className="underline text-[#D9B44A]">
+                  Email directly
+                </a>
+              )}
+            </span>
+          </div>
+        )}
+
+        <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-burgundy hover:bg-crimson text-[#FBF4E9] border border-burgundy hover:border-crimson text-sm font-semibold transition-colors disabled:opacity-60"
+          >
+            <Send className="w-4 h-4" />
+            <span>{submitting ? 'Sending...' : 'Send Message'}</span>
+          </button>
+
+          {email && (
+            <a
+              href={`mailto:${email}`}
+              className="text-center sm:text-right text-xs font-mono text-[#BDA5A7] hover:text-[#D9B44A] transition-colors break-all"
+            >
+              or email {email}
+            </a>
           )}
         </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl btn-primary-cta font-semibold text-sm disabled:opacity-60"
-        >
-          <Send className="w-4 h-4" />
-          <span>{isSubmitting ? 'Transmitting...' : 'Send Transmission'}</span>
-        </button>
       </form>
     </div>
   );

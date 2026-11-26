@@ -3,27 +3,59 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Saad Ikram · Crimson Nova — AI & Cybersecurity Engineer</title>
+    <title>Saad Ikram · Crimson Nova — AI &amp; Cybersecurity Software Engineer</title>
     <meta
       name="description"
       content="Portfolio of Saad Ikram (Crimson Nova) — Computer Science student building AI diagnostics, Django automation pipelines, computer-vision systems, and security-conscious web apps."
     />
-    <meta property="og:title" content="Saad Ikram · Crimson Nova — AI & Cybersecurity Engineer" />
+    <link rel="canonical" href="https://portfolioweb-beta-black.vercel.app/" />
+    <meta name="theme-color" content="#0b0507" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#faf8f5" media="(prefers-color-scheme: light)" />
+
+    <!-- Open Graph / LinkedIn / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://portfolioweb-beta-black.vercel.app/" />
+    <meta
+      property="og:title"
+      content="Saad Ikram · Crimson Nova — AI &amp; Cybersecurity Software Engineer"
+    />
     <meta
       property="og:description"
       content="AI diagnostics, automated Django/Celery pipelines, ONVIF/YOLO computer vision, and full-stack software engineering."
     />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/assets/crimson-nova.png" />
+    <meta
+      property="og:image"
+      content="https://portfolioweb-beta-black.vercel.app/assets/crimson-nova.png"
+    />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Saad Ikram · Crimson Nova — AI &amp; Cybersecurity Software Engineer"
+    />
+    <meta
+      name="twitter:description"
+      content="AI diagnostics, automated Django/Celery pipelines, ONVIF/YOLO computer vision, and full-stack software engineering."
+    />
+    <meta
+      name="twitter:image"
+      content="https://portfolioweb-beta-black.vercel.app/assets/crimson-nova.png"
+    />
+
     <link rel="icon" type="image/png" href="/assets/crimson-nova.png" />
+    <link rel="apple-touch-icon" href="/assets/crimson-nova.png" />
+    <link rel="preload" as="image" href="/assets/saad-portrait.jpg" />
+
     <script>
       (function () {
-        var saved = localStorage.getItem('portfolio-theme');
-        if (saved === 'light') {
-          document.documentElement.classList.remove('dark');
-        } else {
-          document.documentElement.classList.add('dark');
-        }
+        var isLight = false;
+        try {
+          isLight = localStorage.getItem('portfolio-theme') === 'light';
+        } catch (e) {}
+        var root = document.documentElement;
+        root.classList.toggle('dark', !isLight);
+        root.style.colorScheme = isLight ? 'light' : 'dark';
       })();
     </script>
   </head>

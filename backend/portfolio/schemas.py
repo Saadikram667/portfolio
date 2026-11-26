@@ -108,7 +108,8 @@ class PortfolioResponseSchema(Schema):
 class ContactInSchema(Schema):
     name: str = Field(..., min_length=2, max_length=120)
     email: EmailStr
-    message: str = Field(..., min_length=10, max_length=3000)
+    subject: str = Field(default="", max_length=160)
+    message: str = Field(..., min_length=3, max_length=3000)
     website: str = Field(default="", max_length=200)
 
 

@@ -1,16 +1,24 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Toaster, toast } from 'sonner';
 import {
   Award,
   Check,
   Copy,
-  FileText,
+  Cpu,
+  Download,
   Github,
+  Layers,
   Linkedin,
   Mail,
+  ShieldCheck,
 } from 'lucide-react';
 
 import { FALLBACK_PORTFOLIO, fetchPortfolio } from './lib/api';
+import {
+  getAvatarCandidates,
+  getResumeDownloadUrl,
+  getSafeMediaUrl,
+} from './lib/media';
 import type { PortfolioPayload, ProjectData } from './types/portfolio';
 
 import { PillNav } from './components/reactbits/PillNav';
@@ -40,21 +48,43 @@ const DEFAULT_MARQUEE = [
 
 export default function App() {
   const [portfolio, setPortfolio] = useState<PortfolioPayload>(FALLBACK_PORTFOLIO);
+  const [loading, setLoading] = useState(true);
   const [isDark, setIsDark] = useState<boolean>(() =>
     document.documentElement.classList.contains('dark')
   );
   const [activeProject, setActiveProject] = useState<ProjectData | null>(null);
-  const [avatarBroken, setAvatarBroken] = useState(false);
+  const [avatarIdx, setAvatarIdx] = useState(0);
+  const [logoBroken, setLogoBroken] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
+
+  const avatarCandidates = useMemo(
+    () => getAvatarCandidates(portfolio.profile.avatar_image),
+    [portfolio.profile.avatar_image]
+  );
+  const currentAvatar = avatarCandidates[avatarIdx];
+  const safeLogo = getSafeMediaUrl(portfolio.profile.brand_logo, '/assets/crimson-nova.png');
+  const resumeHref = getResumeDownloadUrl(portfolio.profile.resume_url);
+
+  useEffect(() => {
+    setAvatarIdx(0);
+  }, [portfolio.profile.avatar_image]);
+
+  useEffect(() => {
+    setLogoBroken(false);
+  }, [safeLogo]);
 
   useEffect(() => {
     let active = true;
-    void fetchPortfolio().then(({ data }) => {
-      if (active) {
-        setPortfolio(data);
-        document.title = `${data.profile.full_name} · ${data.profile.brand_name} — ${data.profile.headline}`;
-      }
-    });
+    void fetchPortfolio()
+      .then(({ data }) => {
+        if (active) {
+          setPortfolio(data);
+          document.title = `${data.profile.full_name} · ${data.profile.brand_name} — ${data.profile.headline}`;
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -87,49 +117,30 @@ export default function App() {
     }
   }
 
-  function handleMissingResume() {
-    toast.info('Upload your PDF CV in Django Unfold Admin (Profile -> Resume file) to enable 1-click download.');
-  }
-
-  const marqueeItems =
-    portfolio.skill_groups.length > 0
-      ? portfolio.skill_groups.flatMap((g) => g.skills.map((s) => s.name))
-      : DEFAULT_MARQUEE;
-
   return (
-    <div className="min-h-screen ambient-glow">
+    <div className="min-h-screen ambient-glow overflow-x-clip">
       <Toaster position="bottom-right" richColors />
 
       <PillNav
         brandName={portfolio.profile.brand_name}
-        brandLogo={portfolio.profile.brand_logo}
+        brandLogo={safeLogo}
         monogram={portfolio.profile.monogram}
         resumeUrl={portfolio.profile.resume_url}
         isDark={isDark}
         onToggleTheme={toggleTheme}
-        onMissingResume={handleMissingResume}
       />
 
-      <main className="max-w-6xl mx-auto px-5 sm:px-8">
-        {/* 1. HERO (Clean Split + Portrait & profile.json Card) */}
-        <section
-          id="hero"
-          className="scroll-mt-24 pt-12 sm:pt-16 pb-10 space-y-12"
-        >
-          <div className="grid grid-cols-1 lg:grid-cols-12 items-center gap-10">
+      <main className="max-w-6xl mx-auto px-4 sm:px-8">
+        {/* 1. HERO */}
+        <section id="hero" className="scroll-mt-24 pt-10 sm:pt-14 pb-10 space-y-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 items-center gap-8 lg:gap-12">
+            {/* Left: Editorial Copy & Actions */}
             <div className="lg:col-span-7 space-y-5">
-              {portfolio.profile.is_available && (
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-mono bg-surface border border-gold/50 text-burgundy dark:text-gold">
-                  <span className="w-2 h-2 rounded-full bg-crimson animate-pulse" />
-                  <span>{portfolio.profile.status_text}</span>
-                </div>
-              )}
-
               <div>
                 <p className="text-xs sm:text-sm font-mono uppercase tracking-[0.2em] text-burgundy dark:text-gold mb-2">
                   {portfolio.profile.full_name} · {portfolio.profile.brand_name}
                 </p>
-                <h1 className="font-display text-4xl sm:text-5xl xl:text-6xl font-bold tracking-tight text-ink leading-[1.08]">
+                <h1 className="font-display text-3xl sm:text-5xl xl:text-6xl font-bold tracking-tight text-ink leading-[1.08]">
                   {portfolio.profile.headline}
                 </h1>
               </div>
@@ -138,42 +149,33 @@ export default function App() {
                 {portfolio.profile.subheadline}
               </p>
 
-              {/* Primary CTAs */}
+              {/* Primary CTAs — clean flat buttons with hover highlight, no glow */}
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <a
                   href="#projects"
-                  className="px-6 py-3 rounded-full btn-primary-cta text-sm font-semibold"
+                  className="px-6 py-3 rounded-full bg-burgundy text-[#FBF4E9] border border-burgundy hover:bg-crimson hover:border-crimson text-sm font-semibold transition-colors"
                 >
                   View My Work
                 </a>
-                {portfolio.profile.resume_url ? (
-                  <a
-                    href={portfolio.profile.resume_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-surface hover:bg-surface-2 text-ink border border-edge hover:border-gold text-sm font-semibold transition-colors"
-                  >
-                    <FileText className="w-4 h-4 text-crimson" />
-                    <span>Download CV</span>
-                  </a>
-                ) : (
-                  <a
-                    href="#contact"
-                    className="px-5 py-3 rounded-full bg-surface hover:bg-surface-2 text-ink border border-edge hover:border-gold text-sm font-semibold transition-colors"
-                  >
-                    Get in Touch
-                  </a>
-                )}
+                <a
+                  href={resumeHref}
+                  download="Saad_Ikram_CV.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-surface hover:bg-surface-2 text-ink border border-edge hover:border-gold text-sm font-semibold transition-colors"
+                >
+                  <Download className="w-4 h-4 text-crimson" />
+                  <span>Download CV</span>
+                </a>
               </div>
 
-              {/* Direct Social Icons (Clean replacement for Footer Dock) */}
+              {/* Direct Social Links */}
               <div className="flex flex-wrap items-center gap-2.5 pt-2">
                 {portfolio.profile.github_url && (
                   <a
                     href={portfolio.profile.github_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="GitHub"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
                   >
                     <Github className="w-4 h-4" />
@@ -185,7 +187,6 @@ export default function App() {
                     href={portfolio.profile.linkedin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="LinkedIn"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
                   >
                     <Linkedin className="w-4 h-4" />
@@ -197,7 +198,6 @@ export default function App() {
                     href={portfolio.profile.credly_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Credly"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
                   >
                     <Award className="w-4 h-4 text-gold" />
@@ -219,79 +219,84 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right Column: Portrait + Compact profile.json Card */}
-            <div className="lg:col-span-5 space-y-4">
-              <div className="rounded-3xl p-5 bg-surface border border-edge shadow-sm flex items-center gap-4">
-                {portfolio.profile.avatar_image && !avatarBroken ? (
-                  <img
-                    src={portfolio.profile.avatar_image}
-                    alt={portfolio.profile.full_name}
-                    onError={() => setAvatarBroken(true)}
-                    className="w-20 h-20 rounded-2xl object-cover object-top ring-2 ring-gold/60 shrink-0"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-surface-2 border border-gold/50 flex items-center justify-center font-display text-2xl font-bold text-burgundy dark:text-gold shrink-0">
-                    {portfolio.profile.monogram}
+            {/* Right: Unified Portrait Card */}
+            <div className="lg:col-span-5">
+              <div className="rounded-3xl p-5 sm:p-6 bg-surface border border-edge shadow-sm space-y-5">
+                <div className="flex items-center gap-5">
+                  {currentAvatar ? (
+                    <img
+                      src={currentAvatar}
+                      alt={portfolio.profile.full_name}
+                      fetchPriority="high"
+                      onError={() => setAvatarIdx((i) => i + 1)}
+                      className="w-28 h-32 sm:w-36 sm:h-40 rounded-2xl object-cover object-top border border-edge shrink-0"
+                    />
+                  ) : (
+                    <div className="w-28 h-32 sm:w-36 sm:h-40 rounded-2xl bg-surface-2 border border-edge flex items-center justify-center font-display text-3xl font-bold text-burgundy dark:text-gold shrink-0">
+                      {portfolio.profile.monogram}
+                    </div>
+                  )}
+                  <div className="min-w-0 space-y-1.5">
+                    <p className="font-display text-2xl font-bold text-ink leading-tight">
+                      {portfolio.profile.full_name}
+                    </p>
+                    <p className="text-xs font-mono text-crimson">
+                      BS CS · DHA Suffa University
+                    </p>
+                    <p className="text-xs text-muted leading-snug">
+                      {portfolio.profile.location}
+                    </p>
                   </div>
-                )}
-                <div className="min-w-0">
-                  <p className="font-display text-xl font-bold text-ink truncate">
-                    {portfolio.profile.full_name}
-                  </p>
-                  <p className="text-xs font-mono text-crimson mt-0.5">
-                    President · TVCSS (DSU)
-                  </p>
-                  <p className="text-xs text-muted mt-1 truncate">
-                    {portfolio.profile.location}
-                  </p>
                 </div>
-              </div>
 
-              {/* profile.json Terminal Card */}
-              <div className="rounded-3xl overflow-hidden bg-[#150A0E] text-[#F4E8D8] terminal-card-frame">
-                <div className="px-4 py-2.5 bg-[#201016] border-b border-[#4A2933] flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#E03150]" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#D9B44A]" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#7A555C]" />
-                  <span className="ml-2 text-xs font-mono text-[#C2AAAB]">profile.json</span>
-                </div>
-                <div className="p-5 font-mono text-[13px] leading-relaxed space-y-1">
-                  <div>
-                    <span className="text-[#D9B44A]">"brand"</span>:{' '}
-                    <span className="text-[#F4E8D8]">"{portfolio.profile.brand_name}"</span>,
+                {/* Clean 2x2 Quick Specs */}
+                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-edge text-xs">
+                  <div className="rounded-xl p-3 bg-bg border border-edge">
+                    <span className="block font-mono text-[10px] uppercase tracking-wider text-muted">
+                      Focus
+                    </span>
+                    <span className="block font-semibold text-ink mt-0.5">
+                      AI / ML &amp; Security
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[#D9B44A]">"degree"</span>:{' '}
-                    <span className="text-[#F4E8D8]">"BS CS · 5th Sem (3.86 CGPA)"</span>,
+                  <div className="rounded-xl p-3 bg-bg border border-edge">
+                    <span className="block font-mono text-[10px] uppercase tracking-wider text-muted">
+                      Stack
+                    </span>
+                    <span className="block font-semibold text-ink mt-0.5">
+                      Python · Django · React
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[#D9B44A]">"focus"</span>: [
-                    <span className="text-[#E03150]">"AI / ML"</span>,{' '}
-                    <span className="text-[#E03150]">"Cybersecurity"</span>,{' '}
-                    <span className="text-[#E03150]">"Full-Stack"</span>],
+                  <div className="rounded-xl p-3 bg-bg border border-edge">
+                    <span className="block font-mono text-[10px] uppercase tracking-wider text-muted">
+                      Studio
+                    </span>
+                    <span className="block font-semibold text-ink mt-0.5">
+                      Crimson Nova (CN)
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[#D9B44A]">"experience"</span>:{' '}
-                    <span className="text-[#F4E8D8]">"3 yrs coding · 2 hackathons"</span>,
-                  </div>
-                  <div>
-                    <span className="text-[#D9B44A]">"status"</span>:{' '}
-                    <span className="text-emerald-400">"open_to_opportunities"</span>
+                  <div className="rounded-xl p-3 bg-bg border border-edge">
+                    <span className="block font-mono text-[10px] uppercase tracking-wider text-muted">
+                      Availability
+                    </span>
+                    <span className="block font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      Open to Roles
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Scrolling Tech-Stack Marquee */}
-          <div className="relative overflow-hidden py-3 border-y border-edge">
+          {/* Crisp Tech-Stack Marquee with Soft Edge Fade */}
+          <div className="marquee-mask relative overflow-hidden py-3 border-y border-edge">
             <div className="marquee-track flex items-center gap-6">
-              {[...marqueeItems, ...marqueeItems].map((item, idx) => (
+              {[...DEFAULT_MARQUEE, ...DEFAULT_MARQUEE].map((item, idx) => (
                 <span
                   key={`${item}-${idx}`}
                   className="inline-flex items-center gap-3 text-xs font-mono text-muted whitespace-nowrap"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-gold/70" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0" />
                   <span>{item}</span>
                 </span>
               ))}
@@ -299,26 +304,89 @@ export default function App() {
           </div>
         </section>
 
-        {/* 2. INTERACTIVE ARCHITECTURE TREE */}
-        <section id="tree-workflow" className="scroll-mt-24 py-12 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-mono uppercase tracking-widest text-crimson">
-                01 / Interactive Map
-              </p>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
-                Architecture Tree
-              </h2>
+        {/* 2. ABOUT CRIMSON NOVA (CN) */}
+        <section id="crimson-nova" className="scroll-mt-24 py-10">
+          <div className="rounded-3xl p-6 sm:p-8 bg-surface border border-edge shadow-sm space-y-6">
+            <div className="flex items-center gap-3.5 border-b border-edge pb-5">
+              {safeLogo && !logoBroken && (
+                <img
+                  src={safeLogo}
+                  alt="Crimson Nova emblem"
+                  onError={() => setLogoBroken(true)}
+                  className="w-11 h-11 rounded-2xl object-cover border border-edge shrink-0"
+                />
+              )}
+              <div>
+                <p className="text-xs font-mono uppercase tracking-widest text-crimson">
+                  Engineering Identity
+                </p>
+                <h2 className="font-display text-2xl sm:text-3xl font-bold text-ink">
+                  What is Crimson Nova (CN)?
+                </h2>
+              </div>
             </div>
-            <p className="text-sm text-muted max-w-md">
-              Expand any branch to explore projects, experience, or stack—click a project leaf to
-              inspect its full case study.
+
+            <p className="text-sm sm:text-base text-muted leading-relaxed max-w-3xl">
+              <strong className="text-ink">Crimson Nova (CN)</strong> is my personal software
+              engineering brand and independent build studio. It serves as the umbrella under which
+              I design, ship, and deploy open-source developer tools, AI/ML pipelines, full-stack
+              web platforms, and competitive hackathon products.
             </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl p-4 bg-bg border border-edge space-y-1.5">
+                <div className="flex items-center gap-2 text-crimson font-mono text-xs uppercase tracking-wider">
+                  <Cpu className="w-4 h-4" />
+                  <span>AI &amp; Data Suite</span>
+                </div>
+                <p className="text-sm font-semibold text-ink">MLOps &amp; Automation Tools</p>
+                <p className="text-xs text-muted leading-relaxed">
+                  Home to projects like the CrimsonNova Data Suite (DataForge CLI &amp; DataRefine),
+                  ERP meeting automation pipelines, and computer-vision prototypes.
+                </p>
+              </div>
+
+              <div className="rounded-2xl p-4 bg-bg border border-edge space-y-1.5">
+                <div className="flex items-center gap-2 text-burgundy dark:text-gold font-mono text-xs uppercase tracking-wider">
+                  <Layers className="w-4 h-4" />
+                  <span>Full-Stack Deployments</span>
+                </div>
+                <p className="text-sm font-semibold text-ink">Client &amp; Production Web Apps</p>
+                <p className="text-xs text-muted leading-relaxed">
+                  Used as my Vercel deployment workspace and freelance engineering identity for
+                  shipping Django, React, and PostgreSQL applications.
+                </p>
+              </div>
+
+              <div className="rounded-2xl p-4 bg-bg border border-edge space-y-1.5">
+                <div className="flex items-center gap-2 text-crimson font-mono text-xs uppercase tracking-wider">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Hackathons &amp; R&amp;D</span>
+                </div>
+                <p className="text-sm font-semibold text-ink">Rapid Prototyping Team</p>
+                <p className="text-xs text-muted leading-relaxed">
+                  My team banner for national hackathons and security-minded experiments—turning
+                  ideas into working live demos under tight deadlines.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. INTERACTIVE ARCHITECTURE TREE */}
+        <section id="tree-workflow" className="scroll-mt-24 py-10 space-y-5">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-crimson">
+              01 / Interactive Map
+            </p>
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
+              Architecture Tree
+            </h2>
           </div>
 
           <Suspense
             fallback={
-              <div className="w-full h-[520px] rounded-3xl border border-edge bg-surface flex items-center justify-center font-mono text-xs text-muted">
+              <div className="w-full h-[420px] rounded-3xl border border-edge bg-surface flex items-center justify-center font-mono text-xs text-muted">
                 Loading architecture tree...
               </div>
             }
@@ -331,145 +399,160 @@ export default function App() {
           </Suspense>
         </section>
 
-        {/* 3. FEATURED PROJECTS (Full-Width Split Cards) */}
-        <section id="projects" className="scroll-mt-24 py-14 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-mono uppercase tracking-widest text-crimson">
-                02 / Proof of Work
-              </p>
-              <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
-                Featured Projects
-              </h2>
-            </div>
-            <p className="text-sm text-muted max-w-md">
-              AI diagnostics, Django automation, computer vision, MLOps, and embedded hardware.
+        {/* 4. FEATURED PROJECTS */}
+        <section id="projects" className="scroll-mt-24 py-12 space-y-6">
+          <div>
+            <p className="text-xs font-mono uppercase tracking-widest text-crimson">
+              02 / Proof of Work
             </p>
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
+              Featured Projects
+            </h2>
           </div>
 
-          <ProjectsSection
-            projects={portfolio.projects}
-            filters={portfolio.project_filters}
-            onOpenProject={(project) => setActiveProject(project)}
-          />
+          {loading && portfolio.projects.length === 0 ? (
+            <div className="rounded-3xl p-8 bg-surface border border-edge font-mono text-xs text-muted animate-pulse">
+              Loading projects...
+            </div>
+          ) : (
+            <ProjectsSection
+              projects={portfolio.projects}
+              filters={portfolio.project_filters}
+              onOpenProject={(project) => setActiveProject(project)}
+            />
+          )}
         </section>
 
-        {/* 4. EXPERIENCE & EDUCATION (All Bullets Directly Visible) */}
-        <section id="experience" className="scroll-mt-24 py-14 space-y-8">
+        {/* 5. EXPERIENCE & EDUCATION */}
+        <section id="experience" className="scroll-mt-24 py-12 space-y-8">
           <div>
             <p className="text-xs font-mono uppercase tracking-widest text-crimson">
               03 / Background
             </p>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
-              Experience, Leadership & Education
+              Experience, Leadership &amp; Education
             </h2>
           </div>
 
-          <div className="relative pl-6 space-y-5">
-            <div
-              aria-hidden="true"
-              className="absolute left-2 top-2 bottom-2 w-0.5 bg-gradient-to-b from-crimson via-gold to-edge"
-            />
-            {portfolio.timeline.map((entry) => (
-              <article
-                key={entry.id}
-                className="relative rounded-2xl p-6 bg-surface border border-edge shadow-sm space-y-3"
-              >
-                <span
-                  aria-hidden="true"
-                  className="absolute -left-[22px] top-7 w-3 h-3 rounded-full bg-crimson ring-4 ring-bg"
-                />
+          {loading && portfolio.timeline.length === 0 ? (
+            <div className="rounded-2xl p-6 bg-surface border border-edge font-mono text-xs text-muted animate-pulse">
+              Loading timeline...
+            </div>
+          ) : (
+            <div className="relative pl-6 space-y-5">
+              <div
+                aria-hidden="true"
+                className="absolute left-2 top-2 bottom-2 w-0.5 bg-gradient-to-b from-crimson via-gold to-edge"
+              />
+              {portfolio.timeline.map((entry) => (
+                <article
+                  key={entry.id}
+                  className="relative rounded-2xl p-5 sm:p-6 bg-surface border border-edge shadow-sm space-y-3"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-[22px] top-7 w-3 h-3 rounded-full bg-crimson ring-4 ring-bg"
+                  />
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                  <div>
-                    <h3 className="font-display text-xl font-bold text-ink">{entry.title}</h3>
-                    <p className="text-sm font-medium text-muted">{entry.organization}</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <div>
+                      <h3 className="font-display text-lg sm:text-xl font-bold text-ink">
+                        {entry.title}
+                      </h3>
+                      <p className="text-sm font-medium text-muted">{entry.organization}</p>
+                    </div>
+                    <span className="self-start sm:self-auto px-2.5 py-1 rounded-md text-xs font-mono bg-surface-2 text-burgundy dark:text-gold border border-edge">
+                      {entry.date_range}
+                    </span>
                   </div>
-                  <span className="self-start sm:self-auto px-2.5 py-1 rounded-md text-xs font-mono bg-surface-2 text-burgundy dark:text-gold border border-edge">
-                    {entry.date_range}
-                  </span>
-                </div>
 
-                <p className="text-sm text-muted leading-relaxed">{entry.summary}</p>
+                  <p className="text-sm text-muted leading-relaxed">{entry.summary}</p>
 
-                {entry.highlights.length > 0 && (
-                  <ul className="space-y-1.5 pt-1">
-                    {entry.highlights.map((bullet) => (
-                      <li
-                        key={bullet}
-                        className="flex items-start gap-2.5 text-sm text-ink leading-relaxed"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-gold mt-2 shrink-0" />
-                        <span>{bullet}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-            ))}
-          </div>
+                  {entry.highlights.length > 0 && (
+                    <ul className="space-y-1.5 pt-1">
+                      {entry.highlights.map((bullet) => (
+                        <li
+                          key={bullet}
+                          className="flex items-start gap-2.5 text-sm text-ink leading-relaxed"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-gold mt-2 shrink-0" />
+                          <span>{bullet}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
-        {/* 5. COMPACT TIERED SKILLS (No Nested Boxes, No JSON Toggle) */}
-        <section id="skills" className="scroll-mt-24 py-14 space-y-6">
+        {/* 6. SKILLS */}
+        <section id="skills" className="scroll-mt-24 py-12 space-y-6">
           <div>
             <p className="text-xs font-mono uppercase tracking-widest text-crimson">
               04 / Technical Stack
             </p>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-ink mt-1">
-              Skills & Tools
+              Skills &amp; Tools
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {portfolio.skill_groups.map((grp) => (
-              <div
-                key={grp.key}
-                className="rounded-2xl p-6 bg-surface border border-edge shadow-sm space-y-4"
-              >
-                <h3 className="font-display text-lg font-bold text-ink pb-2 border-b border-edge">
-                  {grp.label}
-                </h3>
-                <ul className="space-y-3">
-                  {grp.skills.map((skill) => (
-                    <li key={skill.id} className="space-y-0.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-ink">{skill.name}</span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-mono border ${
-                            skill.tier === 'daily'
-                              ? 'bg-crimson/10 text-crimson border-crimson/35'
-                              : skill.tier === 'comfortable'
-                                ? 'bg-gold/15 text-burgundy dark:text-gold border-gold/40'
-                                : 'bg-surface-2 text-muted border-edge'
-                          }`}
-                        >
-                          {skill.tier_label}
-                        </span>
-                      </div>
-                      {skill.used_in.length > 0 && (
-                        <p className="text-xs font-mono text-muted">
-                          Used in: {skill.used_in.join(', ')}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          {loading && portfolio.skill_groups.length === 0 ? (
+            <div className="rounded-2xl p-6 bg-surface border border-edge font-mono text-xs text-muted animate-pulse">
+              Loading skills...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {portfolio.skill_groups.map((grp) => (
+                <div
+                  key={grp.key}
+                  className="rounded-2xl p-5 sm:p-6 bg-surface border border-edge shadow-sm space-y-4"
+                >
+                  <h3 className="font-display text-lg font-bold text-ink pb-2 border-b border-edge">
+                    {grp.label}
+                  </h3>
+                  <ul className="space-y-3">
+                    {grp.skills.map((skill) => (
+                      <li key={skill.id} className="space-y-0.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-ink">{skill.name}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-mono border shrink-0 ${
+                              skill.tier === 'daily'
+                                ? 'tier-daily'
+                                : skill.tier === 'comfortable'
+                                  ? 'tier-comfortable'
+                                  : 'bg-surface-2 text-muted border-edge'
+                            }`}
+                          >
+                            {skill.tier_label}
+                          </span>
+                        </div>
+                        {skill.used_in.length > 0 && (
+                          <p className="text-xs font-mono text-muted">
+                            Used in: {skill.used_in.join(', ')}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
-        {/* 6. CERTIFICATIONS & HACKATHONS */}
+        {/* 7. CERTIFICATIONS */}
         <CertificatesSection
           certificates={portfolio.certificates}
           credlyUrl={portfolio.profile.credly_url}
         />
 
-        {/* 7. CONTACT */}
+        {/* 8. CONTACT */}
         <section
           id="contact"
-          className="scroll-mt-24 py-14 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
+          className="scroll-mt-24 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
         >
           <div className="lg:col-span-5 space-y-5">
             <div>
@@ -495,59 +578,158 @@ export default function App() {
             <button
               type="button"
               onClick={() => void handleCopyEmail()}
-              className="inline-flex items-center gap-2 text-sm font-mono text-burgundy dark:text-gold hover:underline"
+              className="inline-flex items-center gap-2 text-sm font-mono text-burgundy dark:text-gold hover:underline break-all"
             >
-              {emailCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {emailCopied ? (
+                <Check className="w-4 h-4 shrink-0" />
+              ) : (
+                <Copy className="w-4 h-4 shrink-0" />
+              )}
               <span>{portfolio.profile.email}</span>
             </button>
           </div>
 
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-7 min-w-0">
             <ContactTerminal email={portfolio.profile.email} />
           </div>
         </section>
       </main>
 
-      {/* Minimal 1-Line Footer */}
-      <footer className="mt-8 border-t border-edge py-8 px-5">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-muted">
-          <p>
-            © {new Date().getFullYear()} {portfolio.profile.full_name} · {portfolio.profile.brand_name}
-          </p>
-          <div className="flex items-center gap-5">
-            {portfolio.profile.github_url && (
-              <a
-                href={portfolio.profile.github_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-ink transition-colors"
-              >
-                GitHub
+      {/* Structured Footer */}
+      <footer className="mt-14 border-t border-edge bg-surface">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            {/* Brand Column */}
+            <div className="md:col-span-5 space-y-3">
+              <a href="#hero" className="inline-flex items-center gap-3">
+                {safeLogo && !logoBroken && (
+                  <img
+                    src={safeLogo}
+                    alt={`${portfolio.profile.brand_name} emblem`}
+                    onError={() => setLogoBroken(true)}
+                    className="w-9 h-9 rounded-full object-cover border border-edge"
+                  />
+                )}
+                <div className="leading-tight">
+                  <span className="block font-display text-lg font-bold text-ink">
+                    {portfolio.profile.brand_name}
+                  </span>
+                  <span className="block text-[11px] font-mono text-muted">
+                    {portfolio.profile.full_name}
+                  </span>
+                </div>
               </a>
-            )}
-            {portfolio.profile.linkedin_url && (
-              <a
-                href={portfolio.profile.linkedin_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-ink transition-colors"
-              >
-                LinkedIn
-              </a>
-            )}
-            {portfolio.profile.resume_url && (
-              <a
-                href={portfolio.profile.resume_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-ink transition-colors"
-              >
-                CV
-              </a>
-            )}
-            <a href="#hero" className="hover:text-ink transition-colors">
-              Back to top ↑
-            </a>
+              <p className="text-sm text-muted max-w-sm leading-relaxed">
+                AI, cybersecurity, and full-stack software engineering from Karachi, Pakistan —
+                shipping practical pipelines, ML tools, and web systems.
+              </p>
+            </div>
+
+            {/* Navigation Column */}
+            <div className="md:col-span-3 space-y-3">
+              <p className="text-xs font-mono uppercase tracking-widest text-burgundy dark:text-gold">
+                Navigate
+              </p>
+              <ul className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm text-muted">
+                <li>
+                  <a href="#crimson-nova" className="hover:text-ink transition-colors">
+                    About CN
+                  </a>
+                </li>
+                <li>
+                  <a href="#tree-workflow" className="hover:text-ink transition-colors">
+                    Tree
+                  </a>
+                </li>
+                <li>
+                  <a href="#projects" className="hover:text-ink transition-colors">
+                    Projects
+                  </a>
+                </li>
+                <li>
+                  <a href="#experience" className="hover:text-ink transition-colors">
+                    Experience
+                  </a>
+                </li>
+                <li>
+                  <a href="#skills" className="hover:text-ink transition-colors">
+                    Skills
+                  </a>
+                </li>
+                <li>
+                  <a href="#contact" className="hover:text-ink transition-colors">
+                    Contact
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Connect & Resources Column */}
+            <div className="md:col-span-4 space-y-3">
+              <p className="text-xs font-mono uppercase tracking-widest text-burgundy dark:text-gold">
+                Connect
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {portfolio.profile.github_url && (
+                  <a
+                    href={portfolio.profile.github_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
+                  >
+                    <Github className="w-3.5 h-3.5" />
+                    <span>GitHub</span>
+                  </a>
+                )}
+                {portfolio.profile.linkedin_url && (
+                  <a
+                    href={portfolio.profile.linkedin_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
+                  >
+                    <Linkedin className="w-3.5 h-3.5" />
+                    <span>LinkedIn</span>
+                  </a>
+                )}
+                {portfolio.profile.credly_url && (
+                  <a
+                    href={portfolio.profile.credly_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
+                  >
+                    <Award className="w-3.5 h-3.5 text-gold" />
+                    <span>Credly</span>
+                  </a>
+                )}
+                <a
+                  href={resumeHref}
+                  download="Saad_Ikram_CV.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg border border-edge hover:border-gold text-xs font-mono text-muted hover:text-ink transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-crimson" />
+                  <span>CV</span>
+                </a>
+              </div>
+
+              {portfolio.profile.email && (
+                <button
+                  type="button"
+                  onClick={() => void handleCopyEmail()}
+                  className="inline-flex items-center gap-1.5 text-xs font-mono text-muted hover:text-ink transition-colors break-all"
+                >
+                  {emailCopied ? (
+                    <Check className="w-3.5 h-3.5 text-gold" />
+                  ) : (
+                    <Mail className="w-3.5 h-3.5 text-crimson" />
+                  )}
+                  <span>{portfolio.profile.email}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </footer>

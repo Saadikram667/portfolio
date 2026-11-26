@@ -7,12 +7,13 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-local-dev-only-change-before-deploy",
-)
-
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+
+SECRET_KEY = (
+    os.getenv("DJANGO_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "django-insecure-local-dev-only-change-before-deploy"
+).strip()
 
 ALLOWED_HOSTS = [
     h.strip()
@@ -84,7 +85,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# Authentication Backends (Django Axes lockout protection)
+# Authentication Backends (Django Axes lockout protection, proxy-aware for Vercel)
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
     "django.contrib.auth.backends.ModelBackend",
@@ -93,8 +94,9 @@ AUTHENTICATION_BACKENDS = [
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # Hours
 AXES_RESET_ON_SUCCESS = True
+AXES_IPWARE_META_PRECEDENCE_ORDER = ("HTTP_X_FORWARDED_FOR", "REMOTE_ADDR")
 
-# Database: Supabase Pooler (transaction mode) in production, SQLite fallback locally
+# Database: Supabase Transaction Pooler in production, Session Pooler for migrations, SQLite locally
 USE_DIRECT_DB = os.getenv("USE_DIRECT_DB", "False").lower() == "true"
 DB_URL = (
     os.getenv("DIRECT_DATABASE_URL", "").strip()
@@ -103,15 +105,16 @@ DB_URL = (
 )
 
 if DB_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DB_URL,
-            conn_max_age=0,
-            ssl_require=True,
-        )
-    }
+    db_config = dj_database_url.parse(
+        DB_URL,
+        conn_max_age=0,
+        ssl_require=True,
+    )
+    db_config.setdefault("OPTIONS", {})
+    db_config["OPTIONS"]["connect_timeout"] = 10
     if not USE_DIRECT_DB:
-        DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+        db_config["DISABLE_SERVER_SIDE_CURSORS"] = True
+    DATABASES = {"default": db_config}
 else:
     DATABASES = {
         "default": {
@@ -120,7 +123,7 @@ else:
         }
     }
 
-# Cache for django-ratelimit (silence local cache check warning cleanly)
+# Cache for django-ratelimit
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -153,9 +156,19 @@ SUPABASE_S3_ACCESS_KEY = os.getenv("SUPABASE_S3_ACCESS_KEY", "").strip()
 SUPABASE_S3_SECRET_KEY = os.getenv("SUPABASE_S3_SECRET_KEY", "").strip()
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "").strip()
 SUPABASE_S3_REGION = os.getenv("SUPABASE_S3_REGION", "us-east-1").strip()
-SUPABASE_PUBLIC_DOMAIN = os.getenv("SUPABASE_PUBLIC_DOMAIN", "").strip()
+SUPABASE_PUBLIC_DOMAIN = (
+    os.getenv("SUPABASE_PUBLIC_DOMAIN", "")
+    .strip()
+    .removeprefix("https://")
+    .removeprefix("http://")
+    .rstrip("/")
+)
 
-if all([SUPABASE_S3_ENDPOINT, SUPABASE_S3_ACCESS_KEY, SUPABASE_S3_SECRET_KEY, SUPABASE_BUCKET]):
+USE_S3_STORAGE = all(
+    [SUPABASE_S3_ENDPOINT, SUPABASE_S3_ACCESS_KEY, SUPABASE_S3_SECRET_KEY, SUPABASE_BUCKET]
+)
+
+if USE_S3_STORAGE:
     s3_options = {
         "bucket_name": SUPABASE_BUCKET,
         "endpoint_url": SUPABASE_S3_ENDPOINT,
@@ -189,7 +202,7 @@ WHITENOISE_USE_FINDERS = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Hidden Owner-Only Admin Path
+# Hidden Owner-Only Admin Path (MUST match the rewrite path in vercel.json)
 ADMIN_URL_PATH = os.getenv("ADMIN_URL_PATH", "studio-portal-9x2k/").lstrip("/")
 if not ADMIN_URL_PATH.endswith("/"):
     ADMIN_URL_PATH += "/"
@@ -228,4 +241,5 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
     X_FRAME_OPTIONS = "DENY"
